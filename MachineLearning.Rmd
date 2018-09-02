@@ -1,0 +1,86 @@
+---
+title: "MachineLearning.Rmd"
+output: html_document
+---
+Loading data. 
+```{r cache = TRUE}
+fileURL<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileURL, destfile = "pml-training.csv", method = "curl")
+training <- read.csv("pml-training.csv", header = TRUE,  na.strings= c("NA", "#DIV/0!", ""))
+
+fileURL1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileURL1, destfile = "pml-testing.csv", method = "curl")
+testing <- read.csv("pml-testing.csv", header = TRUE, na.strings= c("NA", "#DIV/0!", ""))
+```
+
+Libraries and seed for reproducibility. Paritioning the training dataset into two subsets, one for training and one for testing. 
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rattle)
+set.seed(1234)
+inTrain = createDataPartition(y = training$classe, p = 0.6, list = F)
+myTrain = training[inTrain, ]
+myTest = training[-inTrain, ]
+dim(testing)
+```
+
+
+
+Remove all NA's above a certain threshold, 60 percent. 
+```{r }
+myTrain = myTrain[c(-1)]
+trainingV3 <- myTrain
+for(i in 1:length(myTrain)) { 
+        if( sum( is.na( myTrain[, i] ) ) /nrow(myTrain) >= .6 ) { #if n?? NAs > 60% of total observations
+        for(j in 1:length(trainingV3)) {
+            if( length( grep(names(myTrain[i]), names(trainingV3)[j]) ) ==1)  { 
+                trainingV3 <- trainingV3[ , -j] #Remove that column
+            }   
+        } 
+    }
+}
+myTrain <- trainingV3
+clean1 <- colnames(myTrain)
+clean2 <- clean1[1:58]
+
+myTest <- myTest[clean1]
+testing <- testing[clean2]
+
+
+
+#Coercion
+for (i in 1:length(testing) ) {
+        for(j in 1:length(myTrain)) {
+        if( length( grep(names(myTrain[i]), names(testing)[j]) ) ==1)  {
+            class(testing[j]) <- class(myTrain[i])
+        }      
+    }      
+}
+testing <- rbind(myTrain[2, -59] , testing) 
+testing <- testing[-1,]
+
+```
+
+## Machine Learning
+Random Forest model is used to test the data.
+```{r}
+model <- randomForest(classe ~ . - classe,data = myTrain)
+
+```
+
+## Predictions
+Used testing training data set to see effectiveness
+```{r}
+prediction <- predict(model, myTest, type = "class")
+confusionMatrix(prediction, myTest$classe)
+
+```
+
+## Final Predictions
+Predicted using untouched, testing dataset.
+```{r}
+testpredictions <- predict(model, testing, type = "class")
+confusionMatrix(prediction, myTest$classe)
+```
